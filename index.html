@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スケジュール編集プレビュー</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* Noto Sans JPを優先し、Interをフォールバックに設定 */
+        body {
+            font-family: 'Noto Sans JP', 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent; /* スマホタップ時のハイライトを消す */
+        }
+        /* カスタムのトースト通知スタイル */
+        #toast {
+            position: fixed;
+            bottom: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.75);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            z-index: 1000;
+            transition: bottom 0.5s ease-in-out;
+            font-size: 14px;
+        }
+        #toast.show {
+            bottom: 30px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div class="max-w-md mx-auto bg-gray-100 shadow-lg h-screen flex flex-col">
+        <!-- ヘッダー -->
+        <header class="bg-indigo-600 text-white shadow-md w-full sticky top-0 z-10">
+            <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+                <h1 class="text-xl font-bold">空き時間スケジュール編集</h1>
+                <button id="shareButton" class="p-2 rounded-full hover:bg-indigo-700 active:bg-indigo-800 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12s-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.368a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- スケジュールリスト -->
+        <main id="schedule-list" class="flex-grow overflow-y-auto p-2 pb-4">
+            <!-- JavaScriptでここにスケジュール項目が挿入されます -->
+        </main>
+    </div>
+    
+    <!-- トースト通知用の要素 -->
+    <div id="toast"></div>
+
+    <!-- スケジュール項目テンプレート -->
+    <template id="schedule-item-template">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 mx-2 my-2">
+            <div class="p-4 flex justify-between items-center">
+                <div class="w-32">
+                    <p class="font-bold text-gray-800 text-base date-text"></p>
+                </div>
+                <div class="flex space-x-3">
+                    <div class="text-center">
+                        <p class="text-sm text-gray-600">午前</p>
+                        <button class="schedule-button mt-1 p-2 rounded-full" data-timeslot="am" data-status="x">
+                            <!-- SVGアイコンはJSで設定 -->
+                        </button>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-sm text-gray-600">午後</p>
+                        <button class="schedule-button mt-1 p-2 rounded-full" data-timeslot="pm" data-status="x">
+                            <!-- SVGアイコンはJSで設定 -->
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const scheduleList = document.getElementById('schedule-list');
+            const template = document.getElementById('schedule-item-template');
+            const shareButton = document.getElementById('shareButton');
+            const toast = document.getElementById('toast');
+
+            // --- アイコンの定義 ---
+            const availableIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
+            const unavailableIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
+            const starIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 text-yellow-500" viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>`;
+
+            // --- ボタンの状態を更新する関数 ---
+            function updateButtonState(button) {
+                const status = button.dataset.status;
+                // スタイルをリセット
+                button.classList.remove('bg-red-50', 'bg-green-50', 'bg-yellow-50');
+                
+                if (status === 'o') {
+                    button.innerHTML = availableIcon;
+                    button.classList.add('bg-green-50');
+                } else if (status === 's') {
+                    button.innerHTML = starIcon;
+                    button.classList.add('bg-yellow-50');
+                } else { // 'x' or default
+                    button.innerHTML = unavailableIcon;
+                    button.classList.add('bg-red-50');
+                }
+            }
+            
+            // --- 7日分のスケジュールを生成 ---
+            const today = new Date();
+            const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+            for (let i = 0; i < 7; i++) {
+                const date = new Date(today);
+                date.setDate(today.getDate() + i);
+
+                const month = date.getMonth() + 1;
+                const day = date.getDate();
+                const dayOfWeek = weekdays[date.getDay()];
+                
+                const clone = template.content.cloneNode(true);
+                clone.querySelector('.date-text').textContent = `${month}月${day}日 (${dayOfWeek})`;
+
+                const buttons = clone.querySelectorAll('.schedule-button');
+                buttons.forEach(button => {
+                    updateButtonState(button); // 初期状態を設定
+                    button.addEventListener('click', () => {
+                        // ステータスをサイクルさせる (x -> o -> s -> x)
+                        const currentStatus = button.dataset.status;
+                        let nextStatus;
+                        if (currentStatus === 'x') {
+                            nextStatus = 'o';
+                        } else if (currentStatus === 'o') {
+                            nextStatus = 's';
+                        } else { // currentStatus is 's'
+                            nextStatus = 'x';
+                        }
+                        button.dataset.status = nextStatus;
+                        updateButtonState(button);
+                    });
+                });
+
+                scheduleList.appendChild(clone);
+            }
+
+            // --- 共有ボタンの処理 ---
+            shareButton.addEventListener('click', () => {
+                const url = "https://example.com/cal/aK8sN2pXz";
+                navigator.clipboard.writeText(url).then(() => {
+                    showToast('共有URLをクリップボードにコピーしました！');
+                }).catch(err => {
+                    console.error('コピーに失敗しました: ', err);
+                    showToast('コピーに失敗しました');
+                });
+            });
+
+            // --- トースト表示関数 ---
+            let toastTimer;
+            function showToast(message) {
+                toast.textContent = message;
+                toast.classList.add('show');
+                clearTimeout(toastTimer);
+                toastTimer = setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000); // 3秒後に非表示
+            }
+        });
+    </script>
+
+</body>
+</html>
