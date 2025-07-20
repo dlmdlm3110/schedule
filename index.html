@@ -65,13 +65,13 @@
                 <div class="flex space-x-3">
                     <div class="text-center">
                         <p class="text-sm text-gray-600">午前</p>
-                        <button class="schedule-button mt-1 p-2 rounded-full" data-timeslot="am" data-status="x">
+                        <button class="schedule-button mt-1 p-2 rounded-full" data-timeslot="am">
                             <!-- SVGアイコンはJSで設定 -->
                         </button>
                     </div>
                     <div class="text-center">
                         <p class="text-sm text-gray-600">午後</p>
-                        <button class="schedule-button mt-1 p-2 rounded-full" data-timeslot="pm" data-status="x">
+                        <button class="schedule-button mt-1 p-2 rounded-full" data-timeslot="pm">
                             <!-- SVGアイコンはJSで設定 -->
                         </button>
                     </div>
@@ -86,16 +86,31 @@
             const template = document.getElementById('schedule-item-template');
             const shareButton = document.getElementById('shareButton');
             const toast = document.getElementById('toast');
+            
+            // スケジュールデータを保持するオブジェクト
+            let scheduleData = {};
+            const storageKey = 'mySimpleScheduleApp';
 
             // --- アイコンの定義 ---
             const availableIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
             const unavailableIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
             const starIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 text-yellow-500" viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>`;
 
-            // --- ボタンの状態を更新する関数 ---
-            function updateButtonState(button) {
-                const status = button.dataset.status;
-                // スタイルをリセット
+            // --- データ操作関数 ---
+            function loadSchedule() {
+                const savedData = localStorage.getItem(storageKey);
+                if (savedData) {
+                    scheduleData = JSON.parse(savedData);
+                }
+            }
+
+            function saveSchedule() {
+                localStorage.setItem(storageKey, JSON.stringify(scheduleData));
+            }
+
+            // --- UI更新関数 ---
+            function updateButtonState(button, status) {
+                button.dataset.status = status;
                 button.classList.remove('bg-red-50', 'bg-green-50', 'bg-yellow-50');
                 
                 if (status === 'o') {
@@ -110,43 +125,51 @@
                 }
             }
             
-            // --- 7日分のスケジュールを生成 ---
-            const today = new Date();
-            const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
-            for (let i = 0; i < 7; i++) {
-                const date = new Date(today);
-                date.setDate(today.getDate() + i);
-
-                const month = date.getMonth() + 1;
-                const day = date.getDate();
-                const dayOfWeek = weekdays[date.getDay()];
+            // --- 初期化処理 ---
+            function initialize() {
+                loadSchedule();
+                const today = new Date();
+                const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
                 
-                const clone = template.content.cloneNode(true);
-                clone.querySelector('.date-text').textContent = `${month}月${day}日 (${dayOfWeek})`;
+                for (let i = 0; i < 7; i++) {
+                    const date = new Date(today);
+                    date.setDate(today.getDate() + i);
 
-                const buttons = clone.querySelectorAll('.schedule-button');
-                buttons.forEach(button => {
-                    updateButtonState(button); // 初期状態を設定
-                    button.addEventListener('click', () => {
-                        // ステータスをサイクルさせる (x -> o -> s -> x)
-                        const currentStatus = button.dataset.status;
-                        let nextStatus;
-                        if (currentStatus === 'x') {
-                            nextStatus = 'o';
-                        } else if (currentStatus === 'o') {
-                            nextStatus = 's';
-                        } else { // currentStatus is 's'
-                            nextStatus = 'x';
-                        }
-                        button.dataset.status = nextStatus;
-                        updateButtonState(button);
+                    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                    const month = date.getMonth() + 1;
+                    const day = date.getDate();
+                    const dayOfWeek = weekdays[date.getDay()];
+                    
+                    const clone = template.content.cloneNode(true);
+                    clone.querySelector('.date-text').textContent = `${month}月${day}日 (${dayOfWeek})`;
+
+                    const buttons = clone.querySelectorAll('.schedule-button');
+                    buttons.forEach(button => {
+                        const timeSlot = button.dataset.timeslot;
+                        // 保存されたデータから状態を復元、なければ'x'
+                        const currentStatus = scheduleData[dateKey]?.[timeSlot] || 'x';
+                        updateButtonState(button, currentStatus);
+
+                        button.addEventListener('click', () => {
+                            let nextStatus;
+                            const current = button.dataset.status;
+                            if (current === 'x') nextStatus = 'o';
+                            else if (current === 'o') nextStatus = 's';
+                            else nextStatus = 'x';
+                            
+                            updateButtonState(button, nextStatus);
+
+                            // データオブジェクトを更新して保存
+                            if (!scheduleData[dateKey]) scheduleData[dateKey] = {};
+                            scheduleData[dateKey][timeSlot] = nextStatus;
+                            saveSchedule();
+                        });
                     });
-                });
-
-                scheduleList.appendChild(clone);
+                    scheduleList.appendChild(clone);
+                }
             }
 
-            // --- 共有ボタンの処理 ---
+            // --- イベントリスナー ---
             shareButton.addEventListener('click', () => {
                 const url = "https://example.com/cal/aK8sN2pXz";
                 navigator.clipboard.writeText(url).then(() => {
@@ -157,7 +180,6 @@
                 });
             });
 
-            // --- トースト表示関数 ---
             let toastTimer;
             function showToast(message) {
                 toast.textContent = message;
@@ -165,10 +187,14 @@
                 clearTimeout(toastTimer);
                 toastTimer = setTimeout(() => {
                     toast.classList.remove('show');
-                }, 3000); // 3秒後に非表示
+                }, 3000);
             }
+
+            // --- アプリケーション開始 ---
+            initialize();
         });
     </script>
 
 </body>
 </html>
+
